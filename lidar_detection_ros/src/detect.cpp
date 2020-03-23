@@ -14,9 +14,15 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/common/common.h>
 
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
 #include <jsk_recognition_msgs/BoundingBox.h>
+
+#include <tf/transform_broadcaster.h>
+
 
 namespace pcl
 {
@@ -166,6 +172,7 @@ pcl::PC_XYZI::Ptr detectDriver::CutGround(const pcl::PC_XYZI::Ptr pointcloud, pc
 	return getPoint;
 }
 
+
 void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
 	pcl::PC_XYZI::Ptr pointcloud = GetPCFromMsg(msg);
@@ -175,41 +182,75 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
 	pointcloud = VoxelFilter(pointcloud);
 	pointcloud = CutGround(pointcloud, ground);
 
-	std::cout << pointcloud->points.size() << " " << ground->points.size() << std::endl;
+	
+	pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
+	tree->setInputCloud(pointcloud);
 
+	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;	// 欧式距离分类
+	ec.setClusterTolerance(0.4); 						// 2cm设置ClusterTolerance，该值为近临搜索半径 0.2
+	ec.setMinClusterSize(50);							// 數量下限 50
+	ec.setMaxClusterSize(1000);							// 數量上限 1000
+	ec.setSearchMethod(tree);							// 搜索方法，radiusSearch
+	ec.setInputCloud(pointcloud);
+	ec.extract(cluster_indices);
+	std::cout << "切割出" << cluster_indices.size() << " objects" << std::endl;
+
+	// Publish
 	sensor_msgs::PointCloud2 pubPCmsg = GetMsgFromPC(pointcloud);
 	pubPCmsg.header.frame_id = "my_frame";
+	pubPCmsg.header.stamp = ros::Time::now();
 
 	procPoint_pub.publish(pubPCmsg);
-	return;
-	
-	// jsk_recognition_msgs::BoundingBoxArray bbArr;
-	// jsk_recognition_msgs::BoundingBox bb;
 
-	// bbArr.header.frame_id = "myXD";
-	// bbArr.header.stamp = ros::Time::now();
+	jsk_recognition_msgs::BoundingBoxArray bbArr;
+	bbArr.header.frame_id = "my_frame";
+	bbArr.header.stamp = ros::Time::now();
 
-	// bb.header.frame_id = "myXD";
-	// bb.header.stamp = ros::Time::now();
+	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+	{
+		pcl::PC_XYZI::Ptr cloud_cluster(new pcl::PC_XYZI);
+		pcl::ExtractIndices<pcl::PointXYZI> extract;
+		extract.setInputCloud(pointcloud);
+		extract.setIndices(boost::make_shared<std::vector<int>>(it->indices));
+		extract.filter (*cloud_cluster);
+		
+		pcl::PointXYZI min_pt, max_pt;
+		pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
 
-	// bb.pose.orientation.x = 0;
-	// bb.pose.orientation.y = 0;
-	// bb.pose.orientation.z = 0;
-	// bb.pose.orientation.w = 1;
+		jsk_recognition_msgs::BoundingBox bb;
 
-	// bb.dimensions.x = 3;
-	// bb.dimensions.y = 1;
-	// bb.dimensions.z = 2;
+		bb.header.frame_id = "my_frame";
+		bb.header.stamp = ros::Time::now();
 
-	// bbArr.boxes.push_back(bb);
+		bb.pose.position.x = (max_pt.x + min_pt.x) / 2.0;
+		bb.pose.position.y = (max_pt.y + min_pt.y) / 2.0;
+		bb.pose.position.z = (max_pt.z + min_pt.z) / 2.0;
 
-	// boundBox_pub.publish(bbArr);
-	// bbArr.boxes.clear();
+		bb.pose.orientation.x = 0;
+		bb.pose.orientation.y = 0;
+		bb.pose.orientation.z = 0;
+		bb.pose.orientation.w = 1;
+
+		bb.dimensions.x = (max_pt.x - min_pt.x);
+		bb.dimensions.y = (max_pt.y - min_pt.y);
+		bb.dimensions.z = (max_pt.z - min_pt.z);
+
+		bbArr.boxes.push_back(bb);
+	}
+	boundBox_pub.publish(bbArr);
+
+	static tf::TransformBroadcaster br;
+	tf::Transform transform;
+	transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+	transform.setRotation(tf::Quaternion(tf::Vector3(0, 0, 1), 3.14));
+	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "my_frame"));
+	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "os1_lidar"));
 
 	return;
 }
 
-int main( int argc, char** argv )
+int main( int argc, char** argv)
 {
 	ros::init(argc, argv, "detect");
 	detectDriver node;
