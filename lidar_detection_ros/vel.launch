@@ -1,0 +1,5 @@
+<launch>  
+  <node pkg="lidar_detection_ros" name="detect"  type="detect" output="screen" />
+  <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/vel.rviz"/>
+
+</launch>

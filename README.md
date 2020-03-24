@@ -17,4 +17,5 @@ catkin_make
 
 # run
 roslaunch lidar_detection_ros os1.launch replay:=true
+rosbag play -l /media/yoyo/harddisk/NTUT_Bagmap/NTUToutside_ouster64_20191008.bag
 ```

@@ -23,6 +23,7 @@
 
 #include <tf/transform_broadcaster.h>
 
+#include "lidar_detection_msg/clus.h"
 
 namespace pcl
 {
@@ -38,6 +39,7 @@ class detectDriver
 		ros::Subscriber ousterPC2_sub;
 		ros::Publisher procPoint_pub;
 		ros::Publisher boundBox_pub;
+		ros::Publisher clus_pub;
 
 		pcl::PC_XYZI::Ptr GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr&);
 		sensor_msgs::PointCloud2 GetMsgFromPC(const pcl::PC_XYZI::Ptr);
@@ -53,8 +55,9 @@ detectDriver::detectDriver()
 {
 	node_handle = ros::NodeHandle("~");
 	ousterPC2_sub = node_handle.subscribe("/os1_cloud_node/points", 1, &detectDriver::ousterPC2_sub_callback, this);
-	procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcPoint", 1);
-	boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoubdingBox", 1);
+	procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcPoint", 10);
+	boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoubdingBox", 10);
+	clus_pub = node_handle.advertise<lidar_detection_msg::clus>("/clus", 10);
 }
 
 pcl::PC_XYZI::Ptr detectDriver::GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr& msg)
@@ -207,7 +210,11 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
 	bbArr.header.frame_id = "my_frame";
 	bbArr.header.stamp = ros::Time::now();
 
-	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+	lidar_detection_msg::clus clusMsg;
+	clusMsg.bbarr.header.frame_id = "my_frame";
+	clusMsg.bbarr.header.stamp = ros::Time::now();
+
+	for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
 	{
 		pcl::PC_XYZI::Ptr cloud_cluster(new pcl::PC_XYZI);
 		pcl::ExtractIndices<pcl::PointXYZI> extract;
@@ -218,8 +225,18 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
 		pcl::PointXYZI min_pt, max_pt;
 		pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
 
-		jsk_recognition_msgs::BoundingBox bb;
+		float length_Up = max_pt.z - min_pt.z;
+		float length_Left = max_pt.y - min_pt.y;
+		float length_Front = max_pt.x - min_pt.x;
 
+		if (length_Up >= 2.8f
+			|| length_Left >= 4.5f
+			|| length_Front >= 6.0f
+			|| abs((max_pt.x + min_pt.x) / 2) > 30.0f
+			|| abs((max_pt.y + min_pt.y) / 2) > 30.0f)
+			continue;
+
+		jsk_recognition_msgs::BoundingBox bb;
 		bb.header.frame_id = "my_frame";
 		bb.header.stamp = ros::Time::now();
 
@@ -236,8 +253,14 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
 		bb.dimensions.y = (max_pt.y - min_pt.y);
 		bb.dimensions.z = (max_pt.z - min_pt.z);
 
+		
+		clusMsg.csx.push_back(GetMsgFromPC(cloud_cluster));
+		clusMsg.bbarr.boxes.push_back(bb);
 		bbArr.boxes.push_back(bb);
 	}
+	std::cout << clusMsg.csx.size() << " " << clusMsg.bbarr.boxes.size() << std::endl;
+
+	clus_pub.publish(clusMsg);
 	boundBox_pub.publish(bbArr);
 
 	static tf::TransformBroadcaster br;

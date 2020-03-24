@@ -1,0 +1,2 @@
+sensor_msgs/PointCloud2[] csx
+jsk_recognition_msgs/BoundingBoxArray bbarr

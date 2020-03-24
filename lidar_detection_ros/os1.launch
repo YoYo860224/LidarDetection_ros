@@ -41,6 +41,6 @@
   </node>
   
   <node pkg="lidar_detection_ros" name="detect"  type="detect" output="screen" />
-  <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find ars408_ros)/rviz/os1.rviz"/>
-  
+  <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/os1.rviz"/>
+
 </launch>
