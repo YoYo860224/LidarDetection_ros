@@ -54,7 +54,7 @@ class detectDriver
 detectDriver::detectDriver()
 {
 	node_handle = ros::NodeHandle("~");
-	ousterPC2_sub = node_handle.subscribe("/os1_cloud_node/points", 1, &detectDriver::ousterPC2_sub_callback, this);
+	ousterPC2_sub = node_handle.subscribe("/kitti/velo/pointcloud", 1, &detectDriver::ousterPC2_sub_callback, this);
 	procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcPoint", 10);
 	boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoubdingBox", 10);
 	clus_pub = node_handle.advertise<lidar_detection_msg::clus>("/clus", 10);
@@ -266,8 +266,8 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
 	static tf::TransformBroadcaster br;
 	tf::Transform transform;
 	transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
-	transform.setRotation(tf::Quaternion(tf::Vector3(0, 0, 1), 3.14));
-	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "my_frame"));
+	transform.setRotation(tf::Quaternion(tf::Vector3(0, 0, 1), 0));
+	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "velo_link", "my_frame"));
 	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "os1_lidar"));
 
 	return;
