@@ -1,0 +1,2 @@
+sensor_msgs/PointCloud2[] pointcloudArray
+jsk_recognition_msgs/BoundingBoxArray bboxArray

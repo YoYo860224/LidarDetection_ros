@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   tf
+  lidar_detection_msg
 )
 
 ## System dependencies are found with CMake's conventions
@@ -120,7 +121,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -209,6 +210,6 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
-add_executable(detect src/detect.cpp)
-target_link_libraries(detect ${catkin_LIBRARIES})
-add_dependencies(detect ${catkin_EXPORTED_TARGETS})
+add_executable(PCprocess src/PCprocess.cpp)
+target_link_libraries(PCprocess ${catkin_LIBRARIES})
+add_dependencies(PCprocess ${catkin_EXPORTED_TARGETS})
