@@ -1,0 +1,10 @@
+<launch>
+  <arg name="replay" default="false" doc="do not connect to a sensor; expect /os1_node/{lidar,imu}_packets from replay"/>
+  <include file="$(find ouster_ros)/os1.launch">
+    <arg name="replay" value="$(arg replay)"/>
+  </include>
+
+  <node pkg="lidar_detection_ros" name="PCprocess"  type="PCprocess" output="screen" />
+  <node pkg="lidar_detection_ros" name="Detection_py"  type="Detection.py" output="screen" />
+  <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/os1.rviz"/>
+</launch>
