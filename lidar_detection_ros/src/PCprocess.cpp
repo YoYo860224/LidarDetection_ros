@@ -70,7 +70,7 @@ class detectDriver
 detectDriver::detectDriver()
 {
     node_handle = ros::NodeHandle("~");
-    ousterPC2_sub = node_handle.subscribe("/velodyne_points", 1, &detectDriver::ousterPC2_sub_callback, this);
+    ousterPC2_sub = node_handle.subscribe("/points_no_ground", 1, &detectDriver::ousterPC2_sub_callback, this);
     procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcessedPC", 10);
     grndPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/GroundPC", 10);
     boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoundingBox", 10);
@@ -220,17 +220,19 @@ mypcl::PC_Def::Ptr detectDriver::GetPCfromIndices(const mypcl::PC_Def::Ptr point
     return cloud_cluster;
 }
 
-int myID = 0;
+int frID = 0;
+int myID = 1;
 
 void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
     mypcl::PC_Def::Ptr pointcloud = GetPCFromMsg(msg);
-    mypcl::PC_Def::Ptr ground;
+    // mypcl::PC_Def::Ptr ground;
     std::cout << "=======================" << std::endl;
     std::cout << "PC size:" << pointcloud->size() << std::endl;
+    double t1 = clock();
     pointcloud = PassFilter(pointcloud);
     pointcloud = VoxelFilter(pointcloud);
-    pointcloud = CutGround(pointcloud, ground);
+    // pointcloud = CutGround(pointcloud, ground);
 
     std::vector<pcl::PointIndices> cluster_indices = GetClusters(pointcloud);
     double t5 = clock();
@@ -244,9 +246,9 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     pubPCmsg.header.frame_id = "velodyne";
     pubPCmsg.header.stamp = ros::Time::now();
 
-    sensor_msgs::PointCloud2 pubGDmsg = GetMsgFromPC(ground);
-    pubGDmsg.header.frame_id = "velodyne";
-    pubGDmsg.header.stamp = ros::Time::now();
+    // sensor_msgs::PointCloud2 pubGDmsg = GetMsgFromPC(ground);
+    // pubGDmsg.header.frame_id = "velodyne";
+    // pubGDmsg.header.stamp = ros::Time::now();
 
     // Cluster
     lidar_detection_msg::Clusters clustersMsg;
@@ -257,6 +259,9 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     bba.header.frame_id = "velodyne";
     bba.header.stamp = ros::Time::now();
 
+    pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(frID) + "_0.pcd"), *pointcloud);
+    frID++;
+    myID = 1;
     for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
     {
         auto cloud_cluster = GetPCfromIndices(pointcloud, *it);
@@ -290,8 +295,8 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
         bb.dimensions.y = (max_pt.y - min_pt.y);
         bb.dimensions.z = (max_pt.z - min_pt.z);
 
-        // pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(myID) + ".pcd"), *cloud_cluster);
-        // myID++;
+        pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(frID) + "_" + std::to_string(myID) + ".pcd"), *cloud_cluster);
+        myID++;
 
         clustersMsg.pointcloudArray.push_back(GetMsgFromPC(cloud_cluster));
         clustersMsg.bboxArray.boxes.push_back(bb);
@@ -299,7 +304,7 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     }
 
     procPoint_pub.publish(pubPCmsg);
-    grndPoint_pub.publish(pubGDmsg);
+    // grndPoint_pub.publish(pubGDmsg);
     clusters_pub.publish(clustersMsg);
     std::cout << bba.boxes.size() << std::endl;
     boundBox_pub.publish(bba);
