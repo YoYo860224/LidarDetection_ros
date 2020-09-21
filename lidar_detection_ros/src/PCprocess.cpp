@@ -1,9 +1,12 @@
 #include <string>
+#include <time.h>
 
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include <tf/transform_broadcaster.h>
 #include <sensor_msgs/PointCloud2.h>
 
+// #define PCL_NO_PRECOMPILE
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
 #include <pcl/PCLPointCloud2.h>
@@ -16,283 +19,303 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/common/common.h>
-
-#include <tf/transform_broadcaster.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/impl/passthrough.hpp>
+#include <pcl/search/impl/kdtree.hpp>
+#include <pcl/common/impl/common.hpp>
+#include <pcl/io/io.h>
+#include <pcl/io/pcd_io.h>
 
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
-#include <jsk_recognition_msgs/BoundingBox.h>
+// #include <jsk_recognition_msgs/BoundingBox.h>
+#include <velodyne_pointcloud/point_types.h>
 
 #include "lidar_detection_msg/Clusters.h"
 
-namespace pcl
+namespace mypcl
 {
-	typedef PointCloud<pcl::PointXYZI> PC_XYZI;
+    // Use XYZI.
+    typedef pcl::PointXYZI PointDef;
+    typedef pcl::PointCloud<pcl::PointXYZI> PC_Def;
+
+    // Use XYZIR.
+    // typedef velodyne_pointcloud::PointXYZIR PointDef;
+    // typedef pcl::PointCloud<velodyne_pointcloud::PointXYZIR> PC_Def;
 };
 
 class detectDriver
 {
-	public:
-		detectDriver();
-	private:
-		ros::NodeHandle node_handle;
-		ros::Subscriber ousterPC2_sub;
-		ros::Publisher procPoint_pub;
-		ros::Publisher boundBox_pub;
-		ros::Publisher clusters_pub;
+    public:
+        detectDriver();
+    private:
+        ros::NodeHandle node_handle;
+        ros::Subscriber ousterPC2_sub;
+        ros::Publisher procPoint_pub;
+        ros::Publisher grndPoint_pub;
+        ros::Publisher boundBox_pub;
+        ros::Publisher clusters_pub;
 
-		pcl::PC_XYZI::Ptr GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr&);
-		sensor_msgs::PointCloud2 GetMsgFromPC(const pcl::PC_XYZI::Ptr);
-		
-		pcl::PC_XYZI::Ptr PassFilter(const pcl::PC_XYZI::Ptr);
-		pcl::PC_XYZI::Ptr VoxelFilter(const pcl::PC_XYZI::Ptr);
-		pcl::PC_XYZI::Ptr CutGround(const pcl::PC_XYZI::Ptr, pcl::PC_XYZI::Ptr&);
-		std::vector<pcl::PointIndices> GetClusters(const pcl::PC_XYZI::Ptr);
-		pcl::PC_XYZI::Ptr GetPCfromIndices(const pcl::PC_XYZI::Ptr, pcl::PointIndices);
+        mypcl::PC_Def::Ptr GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr&);
+        sensor_msgs::PointCloud2 GetMsgFromPC(const mypcl::PC_Def::Ptr);
 
-		void ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr&);
+        mypcl::PC_Def::Ptr PassFilter(const mypcl::PC_Def::Ptr);
+        mypcl::PC_Def::Ptr VoxelFilter(const mypcl::PC_Def::Ptr);
+        mypcl::PC_Def::Ptr CutGround(const mypcl::PC_Def::Ptr, mypcl::PC_Def::Ptr&);
+        std::vector<pcl::PointIndices> GetClusters(const mypcl::PC_Def::Ptr);
+        mypcl::PC_Def::Ptr GetPCfromIndices(const mypcl::PC_Def::Ptr, pcl::PointIndices);
+
+        void ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr&);
 };
 
 detectDriver::detectDriver()
 {
-	node_handle = ros::NodeHandle("~");
-	ousterPC2_sub = node_handle.subscribe("/os1_cloud_node/points", 1, &detectDriver::ousterPC2_sub_callback, this);
-	procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcessedPC", 10);
-	boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoundingBox", 10);
-	clusters_pub = node_handle.advertise<lidar_detection_msg::Clusters>("/clusters", 10);
+    node_handle = ros::NodeHandle("~");
+    ousterPC2_sub = node_handle.subscribe("/velodyne_points", 1, &detectDriver::ousterPC2_sub_callback, this);
+    procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcessedPC", 10);
+    grndPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/GroundPC", 10);
+    boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoundingBox", 10);
+    clusters_pub = node_handle.advertise<lidar_detection_msg::Clusters>("/clusters", 10);
 }
 
-pcl::PC_XYZI::Ptr detectDriver::GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr& msg)
+mypcl::PC_Def::Ptr detectDriver::GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
-	// PC2 -> pcl_pc2 -> pcl_pointcloid
-	pcl::PCLPointCloud2 pcl_pc2;
-	pcl::PC_XYZI::Ptr pointcloud(new pcl::PC_XYZI);
+    // PC2 -> pcl_pc2 -> pcl_pointcloid
+    pcl::PCLPointCloud2 pcl_pc2;
+    mypcl::PC_Def::Ptr pointcloud(new mypcl::PC_Def);
 
-	pcl_conversions::toPCL(*msg, pcl_pc2);
-	pcl::fromPCLPointCloud2(pcl_pc2, *pointcloud);
+    pcl_conversions::toPCL(*msg, pcl_pc2);
+    pcl::fromPCLPointCloud2(pcl_pc2, *pointcloud);
 
-	return pointcloud;
+    return pointcloud;
 }
 
-sensor_msgs::PointCloud2 detectDriver::GetMsgFromPC(const pcl::PC_XYZI::Ptr pointcloud)
+sensor_msgs::PointCloud2 detectDriver::GetMsgFromPC(const mypcl::PC_Def::Ptr pointcloud)
 {
-	// pcl_pointcloid -> pcl_pc2 -> PC2
-	pcl::PCLPointCloud2 pcl_pc2;
-	sensor_msgs::PointCloud2 msg;
-	
-	pcl::toPCLPointCloud2(*pointcloud, pcl_pc2);
-	pcl_conversions::fromPCL(pcl_pc2, msg);
+    // pcl_pointcloid -> pcl_pc2 -> PC2
+    pcl::PCLPointCloud2 pcl_pc2;
+    sensor_msgs::PointCloud2 msg;
 
-	return msg;
+    pcl::toPCLPointCloud2(*pointcloud, pcl_pc2);
+    pcl_conversions::fromPCL(pcl_pc2, msg);
+
+    return msg;
 }
 
-pcl::PC_XYZI::Ptr detectDriver::PassFilter(const pcl::PC_XYZI::Ptr pointcloud)
+mypcl::PC_Def::Ptr detectDriver::PassFilter(const mypcl::PC_Def::Ptr pointcloud)
 {
-	pcl::PC_XYZI::Ptr getPoint(new pcl::PC_XYZI);
-	*getPoint = *pointcloud;
-	
-	pcl::PassThrough<pcl::PointXYZI> ptfilter1;
-	ptfilter1.setInputCloud(getPoint);
-	ptfilter1.setFilterFieldName("x");
-	ptfilter1.setFilterLimits(-15.0, 15.0);
-	ptfilter1.setFilterLimits(-15.0, 15.0);
-	ptfilter1.setNegative(false);
-	ptfilter1.filter(*getPoint);
+    mypcl::PC_Def::Ptr getPoint(new mypcl::PC_Def);
+    *getPoint = *pointcloud;
 
-	pcl::PassThrough<pcl::PointXYZI> ptfilter2;
-	ptfilter2.setInputCloud(getPoint);
-	ptfilter2.setFilterFieldName("y");
-	ptfilter2.setFilterLimits(-15.0, 15.0);
-	ptfilter2.setFilterLimits(-15.0, 15.0);
-	ptfilter2.setNegative(false);
-	ptfilter2.filter(*getPoint);
+    pcl::PassThrough<mypcl::PointDef> ptfilter1;
+    ptfilter1.setInputCloud(getPoint);
+    ptfilter1.setFilterFieldName("x");
+    ptfilter1.setFilterLimits(-35.0, 35.0);
+    ptfilter1.setNegative(false);
+    ptfilter1.filter(*getPoint);
 
-	pcl::PassThrough<pcl::PointXYZI> ptfilter3;
-	ptfilter3.setInputCloud(getPoint);
-	ptfilter3.setFilterFieldName("z");
-	ptfilter3.setFilterLimits(-15.0, 15.0);
-	ptfilter3.setFilterLimits(-15.0, 15.0);
-	ptfilter3.setNegative(false);
-	ptfilter3.filter(*getPoint);
+    pcl::PassThrough<mypcl::PointDef> ptfilter2;
+    ptfilter2.setInputCloud(getPoint);
+    ptfilter2.setFilterFieldName("y");
+    ptfilter2.setFilterLimits(-35.0, 35.0);
+    ptfilter2.setNegative(false);
+    ptfilter2.filter(*getPoint);
 
-	return getPoint;
+    pcl::PassThrough<mypcl::PointDef> ptfilter3;
+    ptfilter3.setInputCloud(getPoint);
+    ptfilter3.setFilterFieldName("z");
+    ptfilter3.setFilterLimits(-15.0, 15.0);
+    ptfilter3.setNegative(false);
+    ptfilter3.filter(*getPoint);
+
+    return getPoint;
 }
 
-pcl::PC_XYZI::Ptr detectDriver::VoxelFilter(const pcl::PC_XYZI::Ptr pointcloud)
+mypcl::PC_Def::Ptr detectDriver::VoxelFilter(const mypcl::PC_Def::Ptr pointcloud)
 {
-	pcl::PC_XYZI::Ptr getPoint(new pcl::PC_XYZI);
-	*getPoint = *pointcloud;
+    mypcl::PC_Def::Ptr getPoint(new mypcl::PC_Def);
+    *getPoint = *pointcloud;
 
-	pcl::VoxelGrid<pcl::PointXYZI> vg;
-	vg.setLeafSize(0.1f, 0.1f, 0.1f);		// 設置 voxel grid 小方框參數
-	vg.setInputCloud(getPoint);				// 輸入 cloud
-	vg.filter(*getPoint);					// 輸出到 cloud_filtered
+    pcl::VoxelGrid<mypcl::PointDef> vg;
+    vg.setLeafSize(0.1f, 0.1f, 0.1f);		// 設置 voxel grid 小方框參數
+    vg.setInputCloud(getPoint);				// 輸入 cloud
+    vg.filter(*getPoint);					// 輸出到 cloud_filtered
 
-	return getPoint;
+    return getPoint;
 }
 
-pcl::PC_XYZI::Ptr detectDriver::CutGround(const pcl::PC_XYZI::Ptr pointcloud, pcl::PC_XYZI::Ptr& ground)
+mypcl::PC_Def::Ptr detectDriver::CutGround(const mypcl::PC_Def::Ptr pointcloud, mypcl::PC_Def::Ptr& ground)
 {
-	pcl::PC_XYZI::Ptr getPoint(new pcl::PC_XYZI);
-	*getPoint = *pointcloud;
-	
-	// 隨機採樣分割平面
-	pcl::SACSegmentation<pcl::PointXYZI> seg;
-	seg.setOptimizeCoefficients(true);		// 是否優化
-	seg.setModelType(pcl::SACMODEL_PLANE);	// 設置模型種類
-	seg.setMethodType(pcl::SAC_RANSAC);		// 設置採樣方法（RANSAC、LMedS 等）
-	seg.setMaxIterations(1500);				// 設置最大迭代次數
-	seg.setDistanceThreshold(0.2);			// 點到模型上的距離若超出此閥值，就表示該點不在模型上
-	seg.setAxis(Eigen::Vector3f(0, 0, 1));	// 設置軸向
-	seg.setEpsAngle(0.26);					// 設置軸向角度
+    mypcl::PC_Def::Ptr getPoint(new mypcl::PC_Def);
+    *getPoint = *pointcloud;
 
-	ground = pcl::PC_XYZI::Ptr(new pcl::PC_XYZI);
-	pcl::PC_XYZI::Ptr extract_temp(new pcl::PC_XYZI);
+    // 隨機採樣分割平面
+    pcl::SACSegmentation<mypcl::PointDef> seg;
+    seg.setOptimizeCoefficients(true);                      // 是否優化
+    seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);    // 設置模型種類
+    seg.setMethodType(pcl::SAC_RANSAC);                     // 設置採樣方法（RANSAC、LMedS 等）
+    seg.setMaxIterations(500);                              // 設置最大迭代次數
+    seg.setDistanceThreshold(0.1);                          // 點到模型上的距離若超出此閥值，就表示該點不在模型上
+    seg.setAxis(Eigen::Vector3f(0, 0, 1));                  // 設置軸向
+    seg.setEpsAngle(0.1);                                   // 設置軸向角度
 
-	pcl::PointIndices::Ptr inliers(new pcl::PointIndices);					// 採樣到的 indice
-	pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);	// 採樣到的結果參數
-	
-	double nr_points = getPoint->points.size();
-	for (int i = 0; i < 100; i++)
-	{
-		seg.setInputCloud(getPoint);
-		seg.segment(*inliers, *coefficients);
+    ground = mypcl::PC_Def::Ptr(new mypcl::PC_Def);
+    mypcl::PC_Def::Ptr extract_temp(new mypcl::PC_Def);
 
-		// 從 indice 提出平面點並加入地面
-		pcl::ExtractIndices<pcl::PointXYZI> extract;
-		extract.setInputCloud(getPoint);
-		extract.setIndices(inliers);
-		extract.setNegative(false);
-		extract.filter(*extract_temp);
-		*ground += *extract_temp;
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);                  // 採樣到的 indice
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);   // 採樣到的結果參數
 
-		// 設置反向提取，提出非平面點並設為當前點
-		extract.setNegative(true);
-		extract.filter(*getPoint);
+    double nr_points = getPoint->points.size();
+    for (int i = 0; i < 100; i++)
+    {
+        seg.setInputCloud(getPoint);
+        seg.segment(*inliers, *coefficients);
 
-		if(getPoint->points.size() < 0.9 * nr_points)
-			break;
-	}
+        // 從 indice 提出平面點並加入地面
+        pcl::ExtractIndices<mypcl::PointDef> extract;
+        extract.setInputCloud(getPoint);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+        extract.filter(*extract_temp);
+        *ground += *extract_temp;
 
-	return getPoint;
+        // 設置反向提取，提出非平面點並設為當前點
+        extract.setNegative(true);
+        extract.filter(*getPoint);
+
+        if(getPoint->points.size() < 0.9 * nr_points)
+            break;
+    }
+
+    return getPoint;
 }
 
-std::vector<pcl::PointIndices> detectDriver::GetClusters(const pcl::PC_XYZI::Ptr pointcloud)
+std::vector<pcl::PointIndices> detectDriver::GetClusters(const mypcl::PC_Def::Ptr pointcloud)
 {
-	pcl::PC_XYZI::Ptr getPoint(new pcl::PC_XYZI);
-	*getPoint = *pointcloud;
-	
-	pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
-	tree->setInputCloud(getPoint);
+    mypcl::PC_Def::Ptr getPoint(new mypcl::PC_Def);
+    *getPoint = *pointcloud;
 
-	std::vector<pcl::PointIndices> cluster_indices;
-	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;	// 歐式距離分類
-	ec.setClusterTolerance(0.4); 						// 設置
-	ec.setMinClusterSize(50);							// 數量下限 50
-	ec.setMaxClusterSize(1000);							// 數量上限 1000
-	ec.setSearchMethod(tree);							// 搜索方法，radiusSearch
-	ec.setInputCloud(getPoint);
-	ec.extract(cluster_indices);
-	
-	return cluster_indices;
+    pcl::search::KdTree<mypcl::PointDef>::Ptr tree(new pcl::search::KdTree<mypcl::PointDef>);
+    tree->setInputCloud(getPoint);
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<mypcl::PointDef> ec;    // 歐式距離分類
+    ec.setClusterTolerance(0.3);                            // 設置
+    ec.setMinClusterSize(30);                               // 數量下限 50
+    ec.setMaxClusterSize(1000);                             // 數量上限 1000
+    ec.setSearchMethod(tree);                               // 搜索方法，radiusSearch
+    ec.setInputCloud(getPoint);
+    ec.extract(cluster_indices);
+
+    return cluster_indices;
 }
 
-pcl::PC_XYZI::Ptr detectDriver::GetPCfromIndices(const pcl::PC_XYZI::Ptr pointcloud, pcl::PointIndices pID)
+mypcl::PC_Def::Ptr detectDriver::GetPCfromIndices(const mypcl::PC_Def::Ptr pointcloud, pcl::PointIndices pID)
 {
-	pcl::PC_XYZI::Ptr cloud_cluster(new pcl::PC_XYZI);
-	pcl::ExtractIndices<pcl::PointXYZI> extract;
-	extract.setInputCloud(pointcloud);
-	extract.setIndices(boost::make_shared<std::vector<int>>(pID.indices));
-	extract.filter(*cloud_cluster);
+    mypcl::PC_Def::Ptr cloud_cluster(new mypcl::PC_Def);
+    pcl::ExtractIndices<mypcl::PointDef> extract;
+    extract.setInputCloud(pointcloud);
+    extract.setIndices(boost::make_shared<std::vector<int>>(pID.indices));
+    extract.filter(*cloud_cluster);
 
-	return cloud_cluster;
+    return cloud_cluster;
 }
+
+int myID = 0;
 
 void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
-	pcl::PC_XYZI::Ptr pointcloud = GetPCFromMsg(msg);
-	pcl::PC_XYZI::Ptr ground;
+    mypcl::PC_Def::Ptr pointcloud = GetPCFromMsg(msg);
+    mypcl::PC_Def::Ptr ground;
+    std::cout << "=======================" << std::endl;
+    std::cout << "PC size:" << pointcloud->size() << std::endl;
+    pointcloud = PassFilter(pointcloud);
+    pointcloud = VoxelFilter(pointcloud);
+    pointcloud = CutGround(pointcloud, ground);
 
-	pointcloud = PassFilter(pointcloud);
-	pointcloud = VoxelFilter(pointcloud);
-	pointcloud = CutGround(pointcloud, ground);
+    std::vector<pcl::PointIndices> cluster_indices = GetClusters(pointcloud);
+    double t5 = clock();
 
-	std::vector<pcl::PointIndices> cluster_indices = GetClusters(pointcloud);
-	std::cout << "切割出" << cluster_indices.size() << " objects" << std::endl;
+    std::cout << "PC size:" << pointcloud->size() << std::endl;
+    std::cout << "切割出" << cluster_indices.size() << " objects" << std::endl;
+    std::cout << "FPS " << 1.0 / ((t5 - t1) / CLOCKS_PER_SEC) << std::endl;
 
-	// Publish
-	sensor_msgs::PointCloud2 pubPCmsg = GetMsgFromPC(pointcloud);
-	pubPCmsg.header.frame_id = "my_frame";
-	pubPCmsg.header.stamp = ros::Time::now();
+    // Publish
+    sensor_msgs::PointCloud2 pubPCmsg = GetMsgFromPC(pointcloud);
+    pubPCmsg.header.frame_id = "velodyne";
+    pubPCmsg.header.stamp = ros::Time::now();
 
-	lidar_detection_msg::Clusters clustersMsg;
-	clustersMsg.bboxArray.header.frame_id = "my_frame";
-	clustersMsg.bboxArray.header.stamp = ros::Time::now();
+    sensor_msgs::PointCloud2 pubGDmsg = GetMsgFromPC(ground);
+    pubGDmsg.header.frame_id = "velodyne";
+    pubGDmsg.header.stamp = ros::Time::now();
 
-	for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
-	{
-		auto cloud_cluster = GetPCfromIndices(pointcloud, *it);
+    // Cluster
+    lidar_detection_msg::Clusters clustersMsg;
+    clustersMsg.bboxArray.header.frame_id = "velodyne";
+    clustersMsg.bboxArray.header.stamp = ros::Time::now();
 
-		// 長寬高篩選
-		pcl::PointXYZI min_pt, max_pt;
-		pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
+    jsk_recognition_msgs::BoundingBoxArray bba;
+    bba.header.frame_id = "velodyne";
+    bba.header.stamp = ros::Time::now();
 
-		float length_Up = max_pt.z - min_pt.z;
-		float length_Left = max_pt.y - min_pt.y;
-		float length_Front = max_pt.x - min_pt.x;
+    for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+    {
+        auto cloud_cluster = GetPCfromIndices(pointcloud, *it);
 
-		if (length_Up >= 2.8f
-			|| length_Left >= 4.5f
-			|| length_Front >= 6.0f
-			|| abs((max_pt.x + min_pt.x) / 2) > 30.0f
-			|| abs((max_pt.y + min_pt.y) / 2) > 30.0f)
-			continue;
+        // 長寬高篩選
+        mypcl::PointDef min_pt, max_pt;
+        pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
 
-		// 建立 Bounding Box
-		jsk_recognition_msgs::BoundingBox bb;
-		bb.header.frame_id = "my_frame";
-		bb.header.stamp = ros::Time::now();
+        float length_Up = max_pt.z - min_pt.z;
+        float length_Left = max_pt.y - min_pt.y;
+        float length_Front = max_pt.x - min_pt.x;
 
-		bb.pose.position.x = (max_pt.x + min_pt.x) / 2.0;
-		bb.pose.position.y = (max_pt.y + min_pt.y) / 2.0;
-		bb.pose.position.z = (max_pt.z + min_pt.z) / 2.0;
+        if (length_Up >= 3.0f || length_Up <= 0.5f || max_pt.z > 3.0f || max_pt.z < -3.0f)
+            continue;
 
-		bb.pose.orientation.x = 0;
-		bb.pose.orientation.y = 0;
-		bb.pose.orientation.z = 0;
-		bb.pose.orientation.w = 1;
+        // 建立 Bounding Box
+        jsk_recognition_msgs::BoundingBox bb;
+        bb.header.frame_id = "velodyne";
+        bb.header.stamp = ros::Time::now();
 
-		bb.dimensions.x = (max_pt.x - min_pt.x);
-		bb.dimensions.y = (max_pt.y - min_pt.y);
-		bb.dimensions.z = (max_pt.z - min_pt.z);
+        bb.pose.position.x = (max_pt.x + min_pt.x) / 2.0;
+        bb.pose.position.y = (max_pt.y + min_pt.y) / 2.0;
+        bb.pose.position.z = (max_pt.z + min_pt.z) / 2.0;
 
-		clustersMsg.pointcloudArray.push_back(GetMsgFromPC(cloud_cluster));
-		clustersMsg.bboxArray.boxes.push_back(bb);
-	}
+        bb.pose.orientation.x = 0;
+        bb.pose.orientation.y = 0;
+        bb.pose.orientation.z = 0;
+        bb.pose.orientation.w = 1;
 
-	procPoint_pub.publish(pubPCmsg);
-	clusters_pub.publish(clustersMsg);
-	boundBox_pub.publish(clustersMsg.bboxArray);
+        bb.dimensions.x = (max_pt.x - min_pt.x);
+        bb.dimensions.y = (max_pt.y - min_pt.y);
+        bb.dimensions.z = (max_pt.z - min_pt.z);
 
-	// Public TF
-	static tf::TransformBroadcaster br;
-	tf::Transform transform;
-	transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
-	transform.setRotation(tf::Quaternion(tf::Vector3(0, 0, 1), 3.14));
-	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "my_frame"));
-	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "os1_lidar"));
+        // pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(myID) + ".pcd"), *cloud_cluster);
+        // myID++;
+
+        clustersMsg.pointcloudArray.push_back(GetMsgFromPC(cloud_cluster));
+        clustersMsg.bboxArray.boxes.push_back(bb);
+        bba.boxes.push_back(bb);
+    }
+
+    procPoint_pub.publish(pubPCmsg);
+    grndPoint_pub.publish(pubGDmsg);
+    clusters_pub.publish(clustersMsg);
+    std::cout << bba.boxes.size() << std::endl;
+    boundBox_pub.publish(bba);
 }
 
 int main( int argc, char** argv)
 {
-	ros::init(argc, argv, "PCprocess");
-	detectDriver node;
-	ros::Rate r(60);
+    ros::init(argc, argv, "PCprocess");
+    detectDriver node;
+    ros::Rate r(60);
 
-	while (ros::ok())
-	{
-		ros::spinOnce();
-		r.sleep();
-	}
+    while (ros::ok())
+    {
+        ros::spinOnce();
+        r.sleep();
+    }
 
-	return 0;
+    return 0;
 }
