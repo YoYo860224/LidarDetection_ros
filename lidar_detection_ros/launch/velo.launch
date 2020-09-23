@@ -1,0 +1,13 @@
+<launch>
+    <node pkg="lidar_detection_ros" name="PCprocess"  type="PCprocess" output="screen" />
+    <!-- <node pkg="lidar_detection_ros" type="VelPCP" name="VelPCP"  output="screen">
+        <param name="point_topic" value="/velodyne_points" />
+        <param name="remove_floor" value="true" />
+        <param name="sensor_model" value="32" />
+        <param name="sensor_height" value="2.0" />
+        <param name="max_slope" value="10.0" />
+        <param name="vertical_thres" value="0.011" />
+        <param name="horizontal_res" value="5000" />
+    </node> -->
+    <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/os1.rviz"/>
+  </launch>

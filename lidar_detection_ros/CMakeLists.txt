@@ -20,6 +20,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+find_package(OpenCV REQUIRED)
+find_package(PCL 1.7 REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -123,6 +125,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -213,3 +216,7 @@ include_directories(
 add_executable(PCprocess src/PCprocess.cpp)
 target_link_libraries(PCprocess ${catkin_LIBRARIES})
 add_dependencies(PCprocess ${catkin_EXPORTED_TARGETS})
+
+add_executable(VelPCP src/VelPCP.cpp)
+target_link_libraries(VelPCP ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(VelPCP ${catkin_EXPORTED_TARGETS})

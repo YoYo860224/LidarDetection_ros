@@ -31,6 +31,18 @@
 #include <velodyne_pointcloud/point_types.h>
 
 #include "lidar_detection_msg/Clusters.h"
+#include <sys/stat.h>
+#include <iostream>
+
+using namespace std;
+
+bool dirExists(const std::string &path) {
+    struct stat info;
+    if (stat(path.c_str(), &info) == 0 && info.st_mode & S_IFDIR) {
+        return true;
+    }
+    return false;
+}
 
 namespace mypcl
 {
@@ -201,7 +213,7 @@ std::vector<pcl::PointIndices> detectDriver::GetClusters(const mypcl::PC_Def::Pt
     pcl::EuclideanClusterExtraction<mypcl::PointDef> ec;    // 歐式距離分類
     ec.setClusterTolerance(0.3);                            // 設置
     ec.setMinClusterSize(30);                               // 數量下限 50
-    ec.setMaxClusterSize(1000);                             // 數量上限 1000
+    ec.setMaxClusterSize(500);                             // 數量上限 1000
     ec.setSearchMethod(tree);                               // 搜索方法，radiusSearch
     ec.setInputCloud(getPoint);
     ec.extract(cluster_indices);
@@ -220,7 +232,8 @@ mypcl::PC_Def::Ptr detectDriver::GetPCfromIndices(const mypcl::PC_Def::Ptr point
     return cloud_cluster;
 }
 
-int myID = 0;
+int frID = 0;
+int myID = 1;
 
 void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
@@ -228,6 +241,7 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     mypcl::PC_Def::Ptr ground;
     std::cout << "=======================" << std::endl;
     std::cout << "PC size:" << pointcloud->size() << std::endl;
+    double t1 = clock();
     pointcloud = PassFilter(pointcloud);
     pointcloud = VoxelFilter(pointcloud);
     pointcloud = CutGround(pointcloud, ground);
@@ -256,6 +270,11 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     jsk_recognition_msgs::BoundingBoxArray bba;
     bba.header.frame_id = "velodyne";
     bba.header.stamp = ros::Time::now();
+
+    if (dirExists("/home/yoyo/桌面/hd32pcd/"))
+        pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(frID) + "_0.pcd"), *pointcloud);
+
+    myID = 1;
 
     for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
     {
@@ -290,13 +309,16 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
         bb.dimensions.y = (max_pt.y - min_pt.y);
         bb.dimensions.z = (max_pt.z - min_pt.z);
 
-        // pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(myID) + ".pcd"), *cloud_cluster);
-        // myID++;
+        if (dirExists("/home/yoyo/桌面/hd32pcd/"))
+            pcl::io::savePCDFileBinary(((std::string)"/home/yoyo/桌面/hd32pcd/" + std::to_string(frID) + "_" + std::to_string(myID) + ".pcd"), *cloud_cluster);
+        
+        myID++;
 
         clustersMsg.pointcloudArray.push_back(GetMsgFromPC(cloud_cluster));
         clustersMsg.bboxArray.boxes.push_back(bb);
         bba.boxes.push_back(bb);
     }
+    frID++;
 
     procPoint_pub.publish(pubPCmsg);
     grndPoint_pub.publish(pubGDmsg);
