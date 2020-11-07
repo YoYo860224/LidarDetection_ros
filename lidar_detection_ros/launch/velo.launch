@@ -9,5 +9,7 @@
         <param name="vertical_thres" value="0.011" />
         <param name="horizontal_res" value="5000" />
     </node> -->
-    <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/os1.rviz"/>
+    <node pkg="lidar_detection_ros" name="Detection_py"  type="Detection.py" output="screen" />
+    
+    <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/velo.rviz"/>
   </launch>

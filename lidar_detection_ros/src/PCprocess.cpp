@@ -83,10 +83,10 @@ detectDriver::detectDriver()
 {
     node_handle = ros::NodeHandle("~");
     ousterPC2_sub = node_handle.subscribe("/velodyne_points", 1, &detectDriver::ousterPC2_sub_callback, this);
-    procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcessedPC", 10);
-    grndPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/GroundPC", 10);
-    boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoundingBox", 10);
-    clusters_pub = node_handle.advertise<lidar_detection_msg::Clusters>("/clusters", 10);
+    procPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/ProcessedPC", 1);
+    grndPoint_pub = node_handle.advertise<sensor_msgs::PointCloud2>("/GroundPC", 1);
+    boundBox_pub = node_handle.advertise<jsk_recognition_msgs::BoundingBoxArray>("/BoundingBox", 1);
+    clusters_pub = node_handle.advertise<lidar_detection_msg::Clusters>("/clusters", 1);
 }
 
 mypcl::PC_Def::Ptr detectDriver::GetPCFromMsg(const sensor_msgs::PointCloud2::ConstPtr& msg)
@@ -213,7 +213,7 @@ std::vector<pcl::PointIndices> detectDriver::GetClusters(const mypcl::PC_Def::Pt
     pcl::EuclideanClusterExtraction<mypcl::PointDef> ec;    // 歐式距離分類
     ec.setClusterTolerance(0.3);                            // 設置
     ec.setMinClusterSize(30);                               // 數量下限 50
-    ec.setMaxClusterSize(500);                             // 數量上限 1000
+    ec.setMaxClusterSize(1000);                             // 數量上限 1000
     ec.setSearchMethod(tree);                               // 搜索方法，radiusSearch
     ec.setInputCloud(getPoint);
     ec.extract(cluster_indices);
@@ -314,6 +314,7 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
         
         myID++;
 
+        clustersMsg.procPointCloud = pubPCmsg;
         clustersMsg.pointcloudArray.push_back(GetMsgFromPC(cloud_cluster));
         clustersMsg.bboxArray.boxes.push_back(bb);
         bba.boxes.push_back(bb);

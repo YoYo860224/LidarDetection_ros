@@ -6,5 +6,6 @@
 
   <node pkg="lidar_detection_ros" name="PCprocess"  type="PCprocess" output="screen" />
   <node pkg="lidar_detection_ros" name="Detection_py"  type="Detection.py" output="screen" />
+  
   <node pkg="rviz" name="rviz" type="rviz" required="true" args="-d $(find lidar_detection_ros)/rviz/os1.rviz"/>
 </launch>

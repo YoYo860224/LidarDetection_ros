@@ -1,13 +1,18 @@
-# ARS408_ros
+# LidarDetection_ros
 
 ## Dependence
 * Ubuntu 18.04
 * ROS melodic
+* ros-Velodyne
 * [ouster_example](https://github.com/ouster-lidar/ouster_example)
+* [YoPCNet](https://github.com/YoYo860224/My3DWork)
 
 ## Usage
-```bash
+``` bash
 # bulid
+cd <Where you want to save your model>
+git clone https://github.com/YoYo860224/My3DWork.git
+
 cd <Your ROS Workspace>\src
 git clone https://github.com/ouster-lidar/ouster_example.git
 git clone https://github.com/YoYo860224/LidarDetection_ros.git
@@ -17,5 +22,8 @@ catkin_make
 
 # run
 roslaunch lidar_detection_ros os1.launch replay:=true
-rosbag play -l /media/yoyo/harddisk/NTUT_Bagmap/NTUToutside_ouster64_20191008.bag
+rosbag play -l <os1 Bag>
+
+roslaunch lidar_detection_ros velo.launch
+rosbag play -l <velo Bag>
 ```
