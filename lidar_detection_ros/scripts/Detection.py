@@ -41,8 +41,8 @@ nPoints = 300
 
 # Load Model
 print("- Loading Model...")
-classifier = PointNetCls(k=4, feature_transform=True)
-classifier.load_state_dict(torch.load("/home/yoyo/文件/My3DWork/YoPCNet/pth/fcePI_cls_model_39_0.850000.pth"))
+classifier = PointNetCls(mtype="PI", k=4, feature_transform=True)
+classifier.load_state_dict(torch.load("/home/yoyo/文件/My3DWork/YoPCNet/pth/v32/CE.PI.wF_v32_model_0025_0.880.pth"))
 classifier.cuda()
 classifier = classifier.eval()
 
@@ -95,7 +95,7 @@ def callback(data: Clusters):
         # artfs_cuda = torch.from_numpy(artfs).float().cuda()
 
         # Predict
-        pred, _, _ = classifier(cluPs_cuda, imgs_cuda, 0, 0)
+        pred, _, _ = classifier(cluPs_cuda, imgs_cuda, 0)
         pred_Res = pred.data.max(1)[1].cpu().numpy()
         print(pred_Res)
 

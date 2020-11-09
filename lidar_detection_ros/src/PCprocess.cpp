@@ -245,12 +245,14 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
     pointcloud = PassFilter(pointcloud);
     pointcloud = VoxelFilter(pointcloud);
     pointcloud = CutGround(pointcloud, ground);
-
+    double t3 = clock();
     std::vector<pcl::PointIndices> cluster_indices = GetClusters(pointcloud);
     double t5 = clock();
 
     std::cout << "PC size:" << pointcloud->size() << std::endl;
     std::cout << "切割出" << cluster_indices.size() << " objects" << std::endl;
+    std::cout << "Cut TIME " << ((t3 - t1) / CLOCKS_PER_SEC) << std::endl;
+    std::cout << "Clu TIME " << ((t5 - t3) / CLOCKS_PER_SEC) << std::endl;
     std::cout << "FPS " << 1.0 / ((t5 - t1) / CLOCKS_PER_SEC) << std::endl;
 
     // Publish
@@ -288,7 +290,7 @@ void detectDriver::ousterPC2_sub_callback(const sensor_msgs::PointCloud2::ConstP
         float length_Left = max_pt.y - min_pt.y;
         float length_Front = max_pt.x - min_pt.x;
 
-        if (length_Up >= 3.0f || length_Up <= 0.5f || max_pt.z > 3.0f || max_pt.z < -3.0f)
+        if (length_Up >= 3.0f || length_Up <= 0.5f || max_pt.z > 3.0f || max_pt.z < -3.0f || length_Left >= 7.0f || length_Front >= 7.0f)
             continue;
 
         // 建立 Bounding Box
